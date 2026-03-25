@@ -1,8 +1,8 @@
 # Mantle Intelligence Suite
 
-> Your personal AI-powered DeFi advisor for Mantle network — built for the Mantle Squad Bounty 2026.
+> Your personal AI-powered DeFi advisor for Mantle network built for the Mantle Squad Bounty 2026.
 
-Mantle Intelligence Suite is a conversational AI agent that knows Mantle's entire ecosystem. Instead of jumping between DefiLlama, the Mantle Explorer, and five other sites, you just talk to it. It fetches live data, does the math, and gives you direct answers — not just information.
+Mantle Intelligence Suite is a conversational AI agent that knows Mantle's entire ecosystem. Instead of jumping between DefiLlama, the Mantle Explorer, and five other sites, you just talk to it. It fetches live data, does the math, and gives you direct answers not just information.
 
 It only works with Mantle. No other chains. No guessing.
 
@@ -10,7 +10,7 @@ It only works with Mantle. No other chains. No guessing.
 
 ## What it does
 
-The agent runs in 12 modes. You never pick a mode manually — it detects what you need from what you say.
+The agent runs in 12 modes. You never pick a mode manually, it detects what you need from what you say.
 
 ### Core modes
 
@@ -41,8 +41,10 @@ The agent runs in 12 modes. You never pick a mode manually — it detects what y
 **Step 1 — Clone and install**
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/mantle-intelligence-suite.git
+https://github.com/Rogue-says/Mantle-Intelligence-suite.git
+
 cd mantle-intelligence-suite
+
 npm install
 ```
 
@@ -52,9 +54,9 @@ This gives your agent access to `ethers.js` for reading Mantle RPC and all the h
 
 Open `src/prompts/systemPrompt.js` and copy the full prompt string.
 
-**Step 3 — Create a new OpenClaw agent**
+**Step 3 — Create a new agent**
 
-Go to your OpenClaw workspace and create a new agent.
+Go to your workspace and create a new agent.
 
 **Step 4 — Paste the system prompt**
 
@@ -62,7 +64,7 @@ Paste into the agent instructions field. This gives your agent all 12 modes.
 
 **Step 5 — Add allowed data sources**
 
-Add these URLs in your OpenClaw tool config:
+Add these URLs in your Agent tool config:
 
 ```
 https://yields.llama.fi/pools
@@ -199,7 +201,7 @@ mantle-intelligence-suite/
 
 ## Built for
 
-Mantle Squad Bounty — When AI Meets Mantle — March 2026
+Mantle Squad Bounty, When AI Meets Mantle — March 2026
 
 Not financial advice. Yield data from DefiLlama. Mantle network only.
 
