@@ -1,210 +1,62 @@
 # Mantle Intelligence Suite
 
-> Your personal AI-powered DeFi advisor for Mantle network built for the Mantle Squad Bounty 2026.
+A React application for exploring Mantle yield pools, reading wallet balances, and comparing liquidity-pool scenarios. This revision restores the missing application entrypoint and corrects calculation and transaction-building bugs.
 
-Mantle Intelligence Suite is a conversational AI agent that knows Mantle's entire ecosystem. Instead of jumping between DefiLlama, the Mantle Explorer, and five other sites, you just talk to it. It fetches live data, does the math, and gives you direct answers not just information.
+## Run
 
-It only works with Mantle. No other chains. No guessing.
-
----
-
-## What it does
-
-The agent runs in 12 modes. You never pick a mode manually, it detects what you need from what you say.
-
-### Core modes
-
-| Mode | What you say | What it does |
-|------|-------------|--------------|
-| **Yield** | "best APR on Mantle" | Fetches live DefiLlama data, ranks by risk, outputs yield cards |
-| **Portfolio** | Paste 0x address | Reads all token balances via Mantle RPC, risk assessment, rebalancing |
-| **Strategy** | "I have $5k, medium risk" | Builds allocation plan with percentages, entry steps, rebalancing triggers |
-| **Radar** | "what happened today" | TVL movements, APR changes, ecosystem briefings |
-| **Inspector** | Paste contract address | SAFE / CAUTION / AVOID verdict via Mantle Explorer |
-| **Governance** | "explain proposal X" | Plain English for MNT holders and mETH holders |
-
-### Advanced modes
-
-| Mode | What you say | What it does |
-|------|-------------|--------------|
-| **Simulate** | "what if I swap 1000 USDT" | Preview output, slippage, gas cost, risk score before executing |
-| **Risk** | "am I safe on Aave" | Health factor, liquidation price, max drawdown to liquidation |
-| **PnL** | "how am I doing" | Unrealized gains, fees earned, win rate, best/worst performers |
-| **IL** | "should I LP or just hold" | Impermanent loss calc, LP vs hold comparison, break-even days |
-| **Execute** | "build the tx" | Raw calldata for stake/deposit/swap — you review and sign |
-| **Alert** | "warn me if APR drops below 3%" | Set thresholds for monitoring changes |
-
----
-
-## Setup your AI agent
-
-**Step 1 — Clone and install**
+Requires Node.js 22.12+ and npm.
 
 ```bash
-https://github.com/Rogue-says/Mantle-Intelligence-suite.git
-
-cd mantle-intelligence-suite
-
-npm install
+git clone https://github.com/Rogue-says/Mantle-Intelligence-suite.git
+cd Mantle-Intelligence-suite
+npm ci
+npm run dev
 ```
 
-This gives your agent access to `ethers.js` for reading Mantle RPC and all the hook modules for data fetching.
+Open the URL printed by Vite. For a production bundle:
 
-**Step 2 — Copy the system prompt**
-
-Open `src/prompts/systemPrompt.js` and copy the full prompt string.
-
-**Step 3 — Create a new agent**
-
-Go to your workspace and create a new agent.
-
-**Step 4 — Paste the system prompt**
-
-Paste into the agent instructions field. This gives your agent all 12 modes.
-
-**Step 5 — Add allowed data sources**
-
-Add these URLs in your Agent tool config:
-
-```
-https://yields.llama.fi/pools
-https://api.llama.fi/v2/chains
-https://api.llama.fi/chart/
-https://rpc.mantle.xyz
-https://explorer.mantle.xyz/api
-https://snapshot.org/#/mantle.eth
+```bash
+npm test
+npm run build
+npm run preview
 ```
 
-All free, no API keys required.
+Optionally copy `.env.example` to `.env` and set `VITE_ALCHEMY_RPC`. Browser-prefixed environment variables are public; do not put secret API keys in them.
 
-**Step 6 — Test**
+## Available interface
 
-Ask: `what is the best yield on Mantle right now?`
+| Tool | Behavior |
+| --- | --- |
+| Yields | Fetches the top 15 Mantle pools by TVL from DefiLlama; shows APY, protocol and TVL with loading/error states |
+| Wallet | Reads native MNT and six configured ERC-20 balances from a supplied address |
+| LP calculator | Estimates impermanent loss for an initially equal-value 50/50 constant-product pool and compares it with fixed fee assumptions |
 
-The agent fetches live data and responds with ranked recommendations.
+The wallet view is read-only. It does not connect a signer or submit transactions. Token balances are not a full inventory of lending, staking or LP positions. External APIs and public RPCs may be unavailable or rate-limited.
 
----
+## Reusable modules
 
-## Safety built in
+- `useDefiLlama`: yields, browser-local history, changes and exploratory trends. Snapshots are bounded and spaced at least five minutes apart. Trend slopes use elapsed days rather than treating every refresh as a day.
+- `useILCalculator`: 50/50 pool calculations. Dollar loss is measured against the current holding value. LP PnL subtracts the original investment, and zero fee APR has no finite break-even date. Positive prices and equal entry values are required for position calculations.
+- `usePnL`: browser-local entries and mark-to-market calculations, including a valid zero current price. It does not discover cost basis from chain history.
+- `useTxBuilder`: ABI-encoded ERC-20 approvals with an explicitly supplied token, spender and integer base-unit amount. It does not submit them. Placeholder protocol addresses have been removed; staking, lending and swap builders reject requests until verified adapters exist.
+- `useRiskMonitor`: illustrative calculations from supplied collateral/debt. Protocol thresholds are assumptions, not live configuration. Live wallet position discovery now reports that it is unimplemented instead of inventing lending positions from a wallet's native-token balance.
+- `useSimulation`: rough scenarios, not EVM simulation or executable quotes. LP scenarios require explicit USD prices for both tokens. Gas estimates use MNT; no fabricated dollar gas quote is returned.
+- `src/prompts/systemPrompt.js`: an experimental prompt asset. There is no connected LLM backend or functional 12-mode chat interface in this repository.
 
-- Never touches other chains
-- Simulates before recommending execution
-- Calculates IL before recommending LP positions
-- Checks health factor before suggesting leverage or borrowing
-- Flags APR decay (>30% drop = emission decay warning)
-- Never auto-signs — always gives you calldata to review manually
-- Warns about unsustainable APRs on new protocols (<2 weeks old, >50% APR)
+Only Yields, Wallet and LP calculator are wired into the interface. Other hooks are available for further development.
 
----
+## Limits of the calculations
 
-## Protocols the agent knows
+APY is variable; a high yield is not a safety rating. IL calculations exclude concentrated liquidity, changing pool weights and trading costs. Fee APR and holding periods are assumptions. Fees-minus-IL percentages are a simplified comparison, not a total portfolio-return forecast. Multiple collateral assets and protocol-specific liquidation rules require verified on-chain adapters before live risk alerts can be trusted.
 
-| Protocol | Type | Risk |
-|----------|------|------|
-| mETH Protocol | Liquid ETH staking | Low |
-| cmETH | Restaked mETH | Low-Medium |
-| FBTC | Bitcoin on Mantle | Low-Medium |
-| Agni Finance | DEX + liquidity pools | Medium |
-| Merchant Moe | Mantle-native DEX | Medium |
-| Aurelius | Lending and borrowing | Medium |
-| Lendle | Lending protocol | Medium |
-| Aave (Mantle) | Lending | Low-Medium |
-| Mantle Vault | CeFi-linked yield | Medium |
+This project does not implement automated trading, leverage management, liquidation protection or contract security auditing. No live transaction or published deployment was performed during this repair.
 
----
+## Tests
 
-## How it works
+`npm test` checks a known 50/50 LP example, invalid price inputs, zero-APR break-even, a token price falling to zero, and exact approval calldata. `npm run build` verifies the application bundle. CI runs both. External API availability is not tested by the deterministic suite.
 
-```
-You type a question
-        ↓
-Agent detects mode from your message
-        ↓
-Fetches live data from the right API
-        ↓
-Does the math (simulation, IL, health factor, PnL)
-        ↓
-Returns a direct answer with cards, risk levels,
-and plain English explanations
-```
+## Next development steps
 
----
+Add verified protocol adapters and quotes before enabling transactions. A real AI assistant needs a server-side LLM integration and explicit data provenance. Do not present heuristic simulations or hardcoded protocol thresholds as verified financial guidance.
 
-## APIs and tools
-
-All free. No paid services required.
-
-| API | URL | Used for | Free | Key needed |
-|-----|-----|----------|------|------------|
-| DefiLlama | `https://yields.llama.fi/pools` | Live APR + TVL | Yes | No |
-| DefiLlama | `https://api.llama.fi/v2/chains` | Mantle total TVL + 24h change | Yes | No |
-| DefiLlama | `https://api.llama.fi/chart/{pool}` | Historical yields for delta/decay tracking | Yes | No |
-| Mantle RPC | `https://rpc.mantle.xyz` | Wallet balances, token holdings | Yes | No |
-| Mantle Explorer | `https://explorer.mantle.xyz/api` | Contract verification, source code | Yes | No |
-| Snapshot | `https://snapshot.org/#/mantle.eth` | Governance proposals | Yes | No |
-| Alchemy (optional) | `https://mantle-mainnet.g.alchemy.com/v2/{key}` | Faster RPC | Free tier | Yes |
-
-Alchemy is optional — the agent falls back to the public Mantle RPC automatically.
-
----
-
-## Tech stack
-
-- React + Vite (for local development)
-- ethers.js for Mantle RPC reads
-- DefiLlama public API for yields and TVL
-- Snapshot API for governance
-- Powered by OpenClaw agent (Claude-based)
-
----
-
-## Project structure
-
-```
-mantle-intelligence-suite/
-├── .env.example
-├── .gitignore
-├── README.md
-└── src/
-    ├── hooks/
-    │   ├── useDefiLlama.js       live yield/TVL fetching + delta tracking + anomaly detection
-    │   ├── useMantle.js          wallet reads and contract inspection
-    │   ├── useSimulation.js      tx simulation (swap, deposit, LP) with risk scoring
-    │   ├── useRiskMonitor.js     health factor, liquidation price, drawdown calculator
-    │   ├── usePnL.js             position tracking, unrealized PnL, win rate
-    │   ├── useILCalculator.js    impermanent loss calc, LP vs hold comparison
-    │   └── useTxBuilder.js       calldata builder for stake/deposit/swap/withdraw
-    └── prompts/
-        └── systemPrompt.js       full agent brain with all 12 modes
-```
-
----
-
-## Example queries
-
-```
-"what's the best yield right now"
-"analyze 0x1234...abcd"
-"I have $10k, low risk, 6 month horizon"
-"what happened on Mantle today"
-"is 0x5678...efgh a safe contract"
-"what if I swap 500 USDT for mETH"
-"am I safe borrowing on Aave"
-"how's my portfolio doing"
-"should I LP mETH/USDT or just hold"
-"build a tx to stake 1 mETH"
-"alert me if cmETH APR drops below 3%"
-"explain the latest DAO proposal"
-```
-
----
-
-## Built for
-
-Mantle Squad Bounty, When AI Meets Mantle — March 2026
-
-Not financial advice. Yield data from DefiLlama. Mantle network only.
-
----
-
-**Disclaimer:** This tool is for informational purposes only. Nothing here is financial advice. Always do your own research before deploying capital on any DeFi protocol.
+MIT license; see [LICENSE](LICENSE).

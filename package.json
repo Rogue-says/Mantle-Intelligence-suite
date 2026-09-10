@@ -1,12 +1,13 @@
 {
   "name": "mantle-intelligence-suite",
   "version": "1.0.0",
-  "description": "AI-powered DeFi advisor for Mantle network",
+  "description": "Mantle yield research, read-only portfolio tools and LP scenario calculations",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "ethers": "^6.13.0",
@@ -14,8 +15,11 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.2.1",
-    "vite": "^5.1.0"
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.2.2"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
+  }
 }

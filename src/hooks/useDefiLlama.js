@@ -5,7 +5,9 @@ const STORAGE_KEY = 'mantle_yield_history'
 function getYieldHistory() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
-    return stored ? JSON.parse(stored) : {}
+    const history = stored ? JSON.parse(stored) : {}
+    if (!history || typeof history !== 'object' || Array.isArray(history)) return {}
+    return Object.fromEntries(Object.entries(history).filter(([, items]) => Array.isArray(items)).map(([id, items]) => [id, items.filter(s => s && Number.isFinite(Number(s.apy)) && Number.isFinite(Date.parse(s.timestamp)))]))
   } catch {
     return {}
   }
@@ -24,6 +26,7 @@ function recordSnapshot(currentYields) {
   const timestamp = new Date().toISOString()
 
   currentYields.forEach(pool => {
+    if (history[pool.pool]?.length && Date.now() - Date.parse(history[pool.pool].at(-1).timestamp) < 300000) return
     if (!history[pool.pool]) {
       history[pool.pool] = []
     }
@@ -66,7 +69,8 @@ function detectAnomalies(currentYields, history) {
     if (!poolHistory || poolHistory.length < 2) return
 
     const currentApy = parseFloat(pool.apy)
-    const recentSnapshots = poolHistory.slice(-10)
+    const recentSnapshots = poolHistory.filter(s => Date.parse(s.timestamp) < Date.parse(poolHistory.at(-1).timestamp)).slice(-10)
+    if (recentSnapshots.length < 2) return
     const avgApy = recentSnapshots.reduce((sum, s) => sum + parseFloat(s.apy), 0) / recentSnapshots.length
     const stdDev = Math.sqrt(
       recentSnapshots.reduce((sum, s) => sum + Math.pow(parseFloat(s.apy) - avgApy, 2), 0) / recentSnapshots.length
@@ -88,7 +92,7 @@ function detectAnomalies(currentYields, history) {
 
     if (recentSnapshots.length >= 2) {
       const oldest = parseFloat(recentSnapshots[0].apy)
-      const decayRate = (oldest - currentApy) / oldest * 100
+      const decayRate = oldest > 0 ? (oldest - currentApy) / oldest * 100 : 0
       if (decayRate > 30) {
         anomalies.push({
           protocol: pool.protocol,
@@ -114,20 +118,21 @@ function predictAprDecay(poolHistory, daysAhead = 30) {
   const apys = recent.map(s => parseFloat(s.apy))
 
   const n = apys.length
-  const xMean = (n - 1) / 2
+  const xs = recent.map(s => (Date.parse(s.timestamp) - Date.parse(recent[0].timestamp)) / 86400000)
+  const xMean = xs.reduce((a, b) => a + b, 0) / n
   const yMean = apys.reduce((a, b) => a + b, 0) / n
 
   let numerator = 0
   let denominator = 0
   for (let i = 0; i < n; i++) {
-    numerator += (i - xMean) * (apys[i] - yMean)
-    denominator += (i - xMean) * (i - xMean)
+    numerator += (xs[i] - xMean) * (apys[i] - yMean)
+    denominator += (xs[i] - xMean) * (xs[i] - xMean)
   }
 
   const slope = denominator !== 0 ? numerator / denominator : 0
   const intercept = yMean - slope * xMean
 
-  const predicted = intercept + slope * (n + daysAhead)
+  const predicted = intercept + slope * (xs[n - 1] + daysAhead)
 
   return {
     currentApy: apys[n - 1].toFixed(2) + '%',
@@ -141,10 +146,12 @@ function predictAprDecay(poolHistory, daysAhead = 30) {
 export function useDefiLlama() {
   const fetchMantleYields = useCallback(async () => {
     try {
-      const res = await fetch('https://yields.llama.fi/pools')
+      const res = await fetch('https://yields.llama.fi/pools', { signal: AbortSignal.timeout(15000) })
+      if (!res.ok) throw new Error(`Yield API returned ${res.status}`)
       const { data } = await res.json()
+      if (!Array.isArray(data)) throw new Error('Invalid yield response')
       const yields = data
-        .filter(p => p.chain === 'Mantle' && p.apy > 0)
+        .filter(p => p.chain === 'Mantle' && Number.isFinite(p.apy) && p.apy > 0 && Number.isFinite(p.tvlUsd))
         .sort((a, b) => b.tvlUsd - a.tvlUsd)
         .slice(0, 15)
         .map(p => ({
@@ -161,13 +168,14 @@ export function useDefiLlama() {
       return yields
     } catch (e) {
       console.warn('Failed to fetch Mantle yields:', e)
-      return []
+      throw e
     }
   }, [])
 
   const fetchMantleTVL = useCallback(async () => {
     try {
-      const res = await fetch('https://api.llama.fi/v2/chains')
+      const res = await fetch('https://api.llama.fi/v2/chains', { signal: AbortSignal.timeout(15000) })
+      if (!res.ok) throw new Error(`TVL API returned ${res.status}`)
       const data = await res.json()
       const mantle = data.find(c => c.name === 'Mantle')
       return mantle ? {
@@ -218,3 +226,4 @@ export function useDefiLlama() {
 
   return { fetchMantleYields, fetchMantleTVL, getYieldDeltas, getAnomalies, getAprPredictions }
 }
+

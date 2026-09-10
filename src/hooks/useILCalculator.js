@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 
-function calculateIL(priceRatio) {
+export function calculateIL(priceRatio) {
+  if (!Number.isFinite(priceRatio) || priceRatio <= 0) throw new Error('Price ratio must be positive');
   const sqrtR = Math.sqrt(priceRatio)
   const il = (2 * sqrtR) / (1 + priceRatio) - 1
   return Math.abs(il)
@@ -29,6 +30,7 @@ function generateILCurve(steps = 20) {
 }
 
 function calculateNetReturn(ilPercent, feeApr, daysHolding) {
+  if (![feeApr, daysHolding].every(Number.isFinite) || feeApr < 0 || daysHolding < 0) throw new Error('APR and holding days must be nonnegative');
   const feeReturn = (feeApr / 100) * (daysHolding / 365)
   const netReturn = feeReturn - ilPercent
   return {
@@ -36,7 +38,7 @@ function calculateNetReturn(ilPercent, feeApr, daysHolding) {
     impermanentLoss: formatPercent(ilPercent),
     netReturn: formatPercent(netReturn),
     isProfit: netReturn >= 0,
-    breakEvenDays: ilPercent > 0 ? Math.ceil((ilPercent / (feeApr / 100)) * 365) : 0
+    breakEvenDays: ilPercent > 0 ? (feeApr > 0 ? Math.ceil((ilPercent / (feeApr / 100)) * 365) : null) : 0
   }
 }
 
@@ -44,6 +46,7 @@ export function useILCalculator() {
   const calculateForPosition = useCallback((params) => {
     const { tokenA, tokenB, amountA, amountB, entryPriceA, entryPriceB, currentPriceA, currentPriceB, feeApr, entryDate } = params
 
+    validatePosition(params)
     const priceChangeA = (currentPriceA - entryPriceA) / entryPriceA
     const priceChangeB = (currentPriceB - entryPriceB) / entryPriceB
     const priceRatio = currentPriceA / currentPriceB / (entryPriceA / entryPriceB)
@@ -51,8 +54,9 @@ export function useILCalculator() {
     const ilPercent = calculateIL(priceRatio)
 
     const totalValueAtEntry = (amountA * entryPriceA) + (amountB * entryPriceB)
-    const ilDollarLoss = totalValueAtEntry * ilPercent
+    const ilDollarLoss = ((amountA * currentPriceA) + (amountB * currentPriceB)) * ilPercent
 
+    if (entryDate && (!Number.isFinite(Date.parse(entryDate)) || Date.parse(entryDate) > Date.now())) throw new Error('Invalid entry date')
     const daysHolding = entryDate
       ? Math.floor((new Date() - new Date(entryDate)) / (1000 * 60 * 60 * 24))
       : 30
@@ -109,6 +113,8 @@ export function useILCalculator() {
   const compareLPvsHold = useCallback((params) => {
     const { amountA, amountB, entryPriceA, entryPriceB, currentPriceA, currentPriceB, feeApr, daysHolding } = params
 
+    validatePosition(params)
+    calculateNetReturn(0, feeApr, daysHolding)
     const holdPnlA = amountA * (currentPriceA - entryPriceA)
     const holdPnlB = amountB * (currentPriceB - entryPriceB)
     const holdTotalPnl = holdPnlA + holdPnlB
@@ -118,7 +124,8 @@ export function useILCalculator() {
     const ilPercent = calculateIL(priceRatio)
 
     const feeEarnings = entryValue * (feeApr / 100) * (daysHolding / 365)
-    const lpPnl = holdTotalPnl * (1 - ilPercent) + feeEarnings
+    const holdValue = entryValue + holdTotalPnl
+    const lpPnl = holdValue * (1 - ilPercent) - entryValue + feeEarnings
 
     return {
       holdStrategy: {
@@ -129,7 +136,7 @@ export function useILCalculator() {
         pnl: lpPnl.toFixed(2),
         returnPercent: ((lpPnl / entryValue) * 100).toFixed(2) + '%',
         feeEarnings: feeEarnings.toFixed(2),
-        ilCost: (entryValue * ilPercent).toFixed(2)
+        ilCost: (holdValue * ilPercent).toFixed(2)
       },
       difference: (lpPnl - holdTotalPnl).toFixed(2),
       recommendation: lpPnl > holdTotalPnl
@@ -139,4 +146,13 @@ export function useILCalculator() {
   }, [])
 
   return { calculateForPosition, estimateILForPriceChange, getILCurve, compareLPvsHold }
+}
+
+
+function validatePosition(p) {
+  for (const key of ['amountA', 'amountB', 'entryPriceA', 'entryPriceB', 'currentPriceA', 'currentPriceB']) {
+    if (!Number.isFinite(p[key]) || p[key] <= 0) throw new Error(`${key} must be positive`)
+  }
+  const a = p.amountA * p.entryPriceA, b = p.amountB * p.entryPriceB
+  if (Math.abs(a - b) > Math.max(a, b) * 1e-6) throw new Error('This model requires an initially equal-value 50/50 pool')
 }

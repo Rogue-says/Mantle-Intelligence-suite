@@ -64,8 +64,8 @@ export function useRiskMonitor() {
     const protocolConfig = LENDING_PROTOCOLS[protocol] || LENDING_PROTOCOLS.aave
 
     const totalCollateralValue = collateral.reduce((sum, c) => {
-      const factor = COLLATERAL_FACTORS[c.symbol]?.collateralFactor || 0.5
-      return sum + (c.value * factor)
+      if (!Number.isFinite(c.value) || c.value < 0) throw new Error('Invalid collateral value')
+      return sum + c.value
     }, 0)
 
     const totalBorrowValue = borrows.reduce((sum, b) => sum + b.value, 0)
@@ -79,7 +79,7 @@ export function useRiskMonitor() {
     const riskAssessment = assessRiskLevel(healthFactor)
 
     const liquidationScenarios = collateral.map(c => {
-      const lp = calculateLiquidationPrice(c.price, c.amount, totalBorrowValue, protocolConfig.liquidationThreshold)
+      const lp = calculateLiquidationPrice(c.price, c.amount, Math.max(0, totalBorrowValue - (totalCollateralValue - c.value) * protocolConfig.liquidationThreshold), protocolConfig.liquidationThreshold)
       const drawdown = calculateMaxDrawdownToLiquidation(c.price, lp)
       return {
         asset: c.symbol,
@@ -107,38 +107,9 @@ export function useRiskMonitor() {
     }
   }, [])
 
-  const monitorWallet = useCallback(async (address) => {
-    try {
-      const { ethers } = await import('ethers')
-      const provider = new ethers.JsonRpcProvider(MANTLE_RPC)
-
-      const positions = []
-      try {
-        const balance = await provider.getBalance(address)
-        if (balance > 0n) {
-          for (const protocolKey of Object.keys(LENDING_PROTOCOLS)) {
-            positions.push({
-              protocol: protocolKey,
-              collateral: [{
-                symbol: 'MNT',
-                amount: parseFloat(ethers.formatEther(balance)),
-                value: parseFloat(ethers.formatEther(balance)) * 0.85,
-                price: 0.85
-              }],
-              borrows: []
-            })
-          }
-        }
-      } catch (e) {
-        console.warn('Could not fetch MNT balance:', e)
-      }
-
-      return positions.map(p => calculatePositionRisk(p))
-    } catch (e) {
-      console.warn('Wallet monitoring failed:', e)
-      return []
-    }
-  }, [calculatePositionRisk])
+  const monitorWallet = useCallback(async () => {
+    throw new Error('Live lending-position discovery is not implemented. Supply collateral and debt explicitly.')
+  }, [])
 
   const getAlertThresholds = useCallback((healthFactor) => {
     return {
@@ -156,3 +127,4 @@ export function useRiskMonitor() {
 
   return { calculatePositionRisk, monitorWallet, getAlertThresholds, LENDING_PROTOCOLS, COLLATERAL_FACTORS }
 }
+
