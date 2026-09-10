@@ -5,7 +5,8 @@ const STORAGE_KEY = 'mantle_pnl_entries'
 function getEntries() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
-    return stored ? JSON.parse(stored) : []
+    const entries = stored ? JSON.parse(stored) : []
+    return Array.isArray(entries) ? entries : []
   } catch {
     return []
   }
@@ -53,11 +54,12 @@ function getDaysHeld(entryDate) {
 
 export function usePnL() {
   const addEntry = useCallback((entry) => {
+    if (!entry.symbol || !Number.isFinite(entry.amount) || entry.amount <= 0 || !Number.isFinite(entry.entryPrice) || entry.entryPrice <= 0) throw new Error('Symbol, positive amount and entry price are required')
     const entries = getEntries()
     const newEntry = {
-      id: Date.now().toString(),
-      timestamp: new Date().toISOString(),
-      ...entry
+      ...entry,
+      id: crypto.randomUUID(),
+      timestamp: new Date().toISOString()
     }
     entries.push(newEntry)
     saveEntries(entries)
@@ -73,7 +75,7 @@ export function usePnL() {
     if (entries.length === 0) return { positions: [], summary: null }
 
     const positions = entries.map(entry => {
-      const currentPrice = currentPrices[entry.symbol] || entry.entryPrice
+      const currentPrice = currentPrices[entry.symbol] ?? entry.entryPrice
       const pnl = calculatePnL(entry, currentPrice)
       const daysHeld = getDaysHeld(entry.timestamp)
 
@@ -138,3 +140,4 @@ export function usePnL() {
 
   return { addEntry, getEntries: getEntries_, calculatePortfolioPnL, removeEntry, clearAll }
 }
+

@@ -10,8 +10,9 @@ const KNOWN_PROTOCOLS = {
 }
 
 function estimatePriceImpact(inputAmount, poolTvl, fee = 0.003) {
+  if (![inputAmount, poolTvl, fee].every(Number.isFinite) || inputAmount <= 0 || poolTvl <= 0 || fee < 0 || fee >= 1) throw new Error('Invalid simulation inputs')
   const slippage = (inputAmount / (poolTvl + inputAmount)) * 100
-  const priceImpact = Math.min(slippage, 50)
+  const priceImpact = slippage
   const feeCost = inputAmount * fee
   return {
     slippage: priceImpact.toFixed(4) + '%',
@@ -24,8 +25,8 @@ function estimatePriceImpact(inputAmount, poolTvl, fee = 0.003) {
 function estimateGasCost(gasUnits, gasPrice = 0.001) {
   return {
     gasUnits: gasUnits.toString(),
-    estimatedCostETH: (gasUnits * gasPrice / 1e9).toFixed(8),
-    estimatedCostUSD: '~$0.01-0.05'
+    estimatedCostMNT: (gasUnits * gasPrice / 1e9).toFixed(8),
+    estimatedCostUSD: null
   }
 }
 
@@ -59,7 +60,7 @@ export function useSimulation() {
       gasEstimate: gas,
       risk: impact.warning === 'HIGH_SLIPPAGE'
         ? 'Price impact >5%. Consider splitting into smaller trades.'
-        : 'Low impact. Safe to execute.',
+        : 'Illustrative estimate only; obtain a live quote before trading.',
       warnings: impact.warning !== 'OK' ? [impact.warning] : []
     }
   }, [])
@@ -88,12 +89,13 @@ export function useSimulation() {
     }
   }, [])
 
-  const simulateLP = useCallback(async (tokenA, tokenB, amountA, amountB, poolApr, ilRisk = 0.05) => {
+  const simulateLP = useCallback(async (tokenA, tokenB, amountA, amountB, poolApr, ilRisk = 0.05, priceA = null, priceB = null) => {
     const gas = estimateGasCost(TX_GAS_ESTIMATES.addLiquidity)
     const tokenAInfo = KNOWN_PROTOCOLS[tokenA] || { name: 'Unknown', type: 'unknown' }
     const tokenBInfo = KNOWN_PROTOCOLS[tokenB] || { name: 'Unknown', type: 'unknown' }
 
-    const totalValue = amountA + amountB
+    if (![priceA, priceB].every(p => Number.isFinite(p) && p > 0)) throw new Error('LP simulation requires both token USD prices')
+    const totalValue = amountA * priceA + amountB * priceB
     const projectedYield = totalValue * poolApr / 100
     const maxIL = totalValue * ilRisk
     const netExpected = projectedYield - maxIL
@@ -125,8 +127,9 @@ export function useSimulation() {
     if (simulationResult.status === 'WARNING') score += 20
 
     const level = score >= 50 ? 'HIGH' : score >= 25 ? 'MEDIUM' : 'LOW'
-    return { score, level, recommendation: level === 'HIGH' ? 'DO_NOT_PROCEED' : level === 'MEDIUM' ? 'PROCEED_WITH_CAUTION' : 'SAFE_TO_EXECUTE' }
+    return { score, level, recommendation: level === 'HIGH' ? 'DO_NOT_PROCEED' : level === 'MEDIUM' ? 'PROCEED_WITH_CAUTION' : 'REQUIRES_LIVE_VERIFICATION' }
   }, [])
 
   return { simulateSwap, simulateDeposit, simulateLP, getRiskScore }
 }
+
